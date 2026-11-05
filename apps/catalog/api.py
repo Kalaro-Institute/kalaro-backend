@@ -13,8 +13,12 @@ from .schemas import (
     CourseDetailOut,
     CourseListOut,
     CourseUpdateIn,
+    LessonBriefOut,
     LessonIn,
+    LessonUpdateIn,
+    ModuleBriefOut,
     ModuleIn,
+    ModuleUpdateIn,
     ReorderIn,
     ResourceOut,
 )
@@ -123,6 +127,39 @@ def reorder_modules(request, module_id: int, payload: ReorderIn):
     return {"status": "reordered"}
 
 
+@router.patch("/modules/{module_id}", response=ModuleBriefOut, auth=instructor)
+def update_module(request, module_id: int, payload: ModuleUpdateIn):
+    module = get_object_or_404(Module.objects.select_related("course"), pk=module_id)
+    check_course_owner(request.auth, module.course)
+
+    data = payload.dict(exclude_unset=True)
+    if data.get("title") is None:
+        data.pop("title", None)
+    if data.get("order") is None:
+        data.pop("order", None)
+    if "title" in data and not data["title"].strip():
+        raise HttpError(400, "Title cannot be blank.")
+    if "order" in data and data["order"] < 0:
+        raise HttpError(400, "Order cannot be negative.")
+    if "order" in data and Module.objects.filter(
+        course=module.course, order=data["order"]
+    ).exclude(pk=module.pk).exists():
+        raise HttpError(409, "Another module in this course already uses that order.")
+
+    for field, value in data.items():
+        setattr(module, field, value)
+    module.save()
+    return module
+
+
+@router.delete("/modules/{module_id}", response={200: dict}, auth=instructor)
+def delete_module(request, module_id: int):
+    module = get_object_or_404(Module.objects.select_related("course"), pk=module_id)
+    check_course_owner(request.auth, module.course)
+    module.delete()  # lessons, resources, quizzes and assignments cascade
+    return {"status": "deleted"}
+
+
 # ---------------- lessons ----------------
 
 @router.post("/modules/{module_id}/lessons", response={201: dict}, auth=instructor)
@@ -131,6 +168,41 @@ def add_lesson(request, module_id: int, payload: LessonIn):
     check_course_owner(request.auth, module.course)
     lesson = Lesson.objects.create(module=module, **payload.dict())
     return 201, {"id": lesson.id, "title": lesson.title}
+
+
+@router.patch("/lessons/{lesson_id}", response=LessonBriefOut, auth=instructor)
+def update_lesson(request, lesson_id: int, payload: LessonUpdateIn):
+    lesson = get_object_or_404(Lesson.objects.select_related("module__course"), pk=lesson_id)
+    check_course_owner(request.auth, lesson.module.course)
+
+    data = {k: v for k, v in payload.dict(exclude_unset=True).items() if v is not None}
+    if "title" in data and not data["title"].strip():
+        raise HttpError(400, "Title cannot be blank.")
+    if "order" in data and data["order"] < 0:
+        raise HttpError(400, "Order cannot be negative.")
+    if "duration_seconds" in data and data["duration_seconds"] < 0:
+        raise HttpError(400, "Duration cannot be negative.")
+    if "content_type" in data and data["content_type"] not in Lesson.ContentType.values:
+        raise HttpError(
+            400, f"content_type must be one of: {', '.join(Lesson.ContentType.values)}."
+        )
+    if "order" in data and Lesson.objects.filter(
+        module=lesson.module, order=data["order"]
+    ).exclude(pk=lesson.pk).exists():
+        raise HttpError(409, "Another lesson in this module already uses that order.")
+
+    for field, value in data.items():
+        setattr(lesson, field, value)
+    lesson.save()
+    return lesson
+
+
+@router.delete("/lessons/{lesson_id}", response={200: dict}, auth=instructor)
+def delete_lesson(request, lesson_id: int):
+    lesson = get_object_or_404(Lesson.objects.select_related("module__course"), pk=lesson_id)
+    check_course_owner(request.auth, lesson.module.course)
+    lesson.delete()  # resources, quiz, assignment and progress entries cascade
+    return {"status": "deleted"}
 
 
 @router.patch("/lessons/{lesson_id}/reorder", response={200: dict}, auth=instructor)
@@ -197,6 +269,20 @@ def add_resource(request, lesson_id: int, title: str = Form(...), file: Uploaded
 def delete_resource(request, resource_id: int):
     resource = get_object_or_404(Resource, pk=resource_id)
     check_course_owner(request.auth, resource.lesson.module.course)
+    resource.delete()
+    return {"status": "deleted"}
+
+
+@router.delete(
+    "/lessons/{lesson_id}/resources/{resource_id}", response={200: dict}, auth=instructor
+)
+def delete_lesson_resource(request, lesson_id: int, resource_id: int):
+    resource = get_object_or_404(
+        Resource.objects.select_related("lesson__module__course"),
+        pk=resource_id, lesson_id=lesson_id,
+    )
+    check_course_owner(request.auth, resource.lesson.module.course)
+    resource.file.delete(save=False)  # remove the stored file as well as the row
     resource.delete()
     return {"status": "deleted"}
 

@@ -16,6 +16,20 @@ class LessonIn(Schema):
     duration_seconds: int = 0
 
 
+class ModuleUpdateIn(Schema):
+    title: str | None = None
+    order: int | None = None
+
+
+class LessonUpdateIn(Schema):
+    title: str | None = None
+    order: int | None = None
+    content_type: str | None = None
+    text_content: str | None = None
+    video_provider_id: str | None = None
+    duration_seconds: int | None = None
+
+
 class CourseCreateIn(Schema):
     title: str
     summary: str = ""
@@ -56,6 +70,24 @@ class LessonOut(Schema):
     duration_seconds: int
     # video_provider_id and text_content deliberately excluded —
     # gated behind enrollment, added back in module 4
+
+
+class ModuleBriefOut(Schema):
+    id: int
+    course_id: int
+    title: str
+    order: int
+
+
+class LessonBriefOut(Schema):
+    id: int
+    module_id: int
+    title: str
+    order: int
+    content_type: str
+    text_content: str
+    video_provider_id: str
+    duration_seconds: int
 
 
 class ModuleOut(Schema):

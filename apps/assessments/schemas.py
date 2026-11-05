@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from ninja import Schema
 
 
@@ -20,6 +22,28 @@ class QuizCreateIn(Schema):
     time_limit_seconds: int | None = None
     pass_percent: int = 60
     max_attempts: int = 1
+
+
+class QuizUpdateIn(Schema):
+    title: str | None = None
+    time_limit_seconds: int | None = None  # send null explicitly to remove the limit
+    pass_percent: int | None = None
+    max_attempts: int | None = None
+
+
+class QuestionUpdateIn(Schema):
+    text: str | None = None
+    type: str | None = None
+    order: int | None = None
+    points: int | None = None
+    choices: list[ChoiceIn] | None = None  # when sent, replaces ALL existing choices
+
+
+class AssignmentUpdateIn(Schema):
+    title: str | None = None
+    instructions: str | None = None
+    due_at: datetime | None = None  # send null explicitly to remove the deadline
+    max_points: int | None = None
 
 
 class AnswerIn(Schema):
@@ -73,6 +97,32 @@ class QuizOut(Schema):
     pass_percent: int
     max_attempts: int
     questions: list[QuestionOut]
+
+
+class ChoiceAdminOut(Schema):
+    id: int
+    text: str
+    order: int
+    is_correct: bool  # instructor-facing only
+
+
+class QuestionAdminOut(Schema):
+    id: int
+    quiz_id: int
+    text: str
+    type: str
+    order: int
+    points: int
+    choices: list[ChoiceAdminOut]
+
+
+class AssignmentOut(Schema):
+    id: int
+    lesson_id: int
+    title: str
+    instructions: str
+    due_at: datetime | None
+    max_points: int
 
 
 class AttemptOut(Schema):
