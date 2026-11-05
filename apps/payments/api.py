@@ -65,6 +65,11 @@ def paystack_webhook(request):
     if verified["status"] != "success":
         return {"status": "not successful"}
 
+    if reference.startswith("shop-"):
+        from apps.shop.services import confirm_paystack_payment
+        confirm_paystack_payment(reference, verified)
+        return {"status": "ok"}
+
     _confirm_paystack_order(reference, verified)
     return {"status": "ok"}
 

@@ -36,6 +36,7 @@ LOCAL_APPS = [
     "apps.assessments",
     "apps.notifications",
     "apps.live",
+    "apps.shop",
 ]
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 GOOGLE_CALENDAR_REDIRECT_URI = env("GOOGLE_CALENDAR_REDIRECT_URI",
@@ -107,7 +108,14 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.live.tasks.send_class_reminders",
         "schedule": 300.0,  # every 5 minutes, catches both windows via the range check
     },
+    "expire-stale-shop-orders": {
+        "task": "apps.shop.tasks.expire_stale_shop_orders",
+        "schedule": 900.0,  # every 15 minutes
+    },
 }
+
+# Unpaid shop orders hold their stock for this long before being auto-cancelled
+SHOP_ORDER_HOLD_MINUTES = env.int("SHOP_ORDER_HOLD_MINUTES", default=120)
 
 CACHES = {
     "default": {
