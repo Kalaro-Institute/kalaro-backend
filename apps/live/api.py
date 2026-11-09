@@ -1,20 +1,28 @@
+import logging
+
+from django.conf import settings
+from django.core import signing
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from ninja import Router
 from ninja.errors import HttpError
 
 from apps.accounts.auth import any_user, instructor
-from apps.catalog.permissions import check_course_owner, check_enrolled
 from apps.catalog.models import Course
+from apps.catalog.permissions import check_course_owner, check_enrolled
 from apps.notifications.services import notify
 
 from .google_calendar import (
-    create_meet_event, exchange_code_for_refresh_token,
-    get_authorization_url, make_state, read_state,
+    create_meet_event,
+    exchange_code_for_refresh_token,
+    get_authorization_url,
+    make_state,
+    read_state,
 )
 from .models import Attendance, GoogleCalendarGrant, LiveSession
 from .schemas import SessionCreateIn, SessionOut
+
+logger = logging.getLogger(__name__)
 
 router = Router(tags=["live"])
 
@@ -25,15 +33,36 @@ def connect_google_calendar(request):
     return {"authorization_url": get_authorization_url(state)}
 
 
+def _back_to_frontend(status: str) -> HttpResponseRedirect:
+    base = settings.FRONTEND_BASE_URL.rstrip("/")
+    return HttpResponseRedirect(f"{base}{settings.GOOGLE_CALENDAR_RETURN_PATH}?calendar={status}")
+
+
 @router.get("/google/callback", auth=None)
-def google_callback(request, code: str, state: str):
-    user_id = read_state(state)
-    refresh_token = exchange_code_for_refresh_token(code)
+def google_callback(
+    request, code: str | None = None, state: str | None = None, error: str | None = None
+):
+    """Google sends the browser here. Always finish by sending the person back to the
+    frontend, with ?calendar=connected or ?calendar=error, so they never see a raw error."""
+    if error or not code or not state:  # e.g. the user clicked Cancel on Google's screen
+        return _back_to_frontend("error")
+    try:
+        user_id = read_state(state)  # raises BadSignature (incl. expired) if tampered/old
+    except signing.BadSignature:
+        return _back_to_frontend("error")
+
+    try:
+        refresh_token = exchange_code_for_refresh_token(code)
+    except Exception:
+        logger.exception("Google Calendar token exchange failed")
+        return _back_to_frontend("error")
+    if not refresh_token:
+        return _back_to_frontend("error")
 
     GoogleCalendarGrant.objects.update_or_create(
         user_id=user_id, defaults={"refresh_token": refresh_token},
     )
-    return HttpResponseRedirect(f"{request.build_absolute_uri('/')}calendar-connected")
+    return _back_to_frontend("connected")
 
 
 @router.post("/courses/{course_id}/sessions", response={201: SessionOut}, auth=instructor)

@@ -22,6 +22,11 @@ def build_auth_flow() -> Flow:
         },
         scopes=SCOPES,
         redirect_uri=settings.GOOGLE_CALENDAR_REDIRECT_URI,
+        # The connect and callback requests build separate Flow objects, so an
+        # auto-generated PKCE verifier from the first would be lost before the code
+        # exchange and Google would reject it ("Missing code verifier"). This is a
+        # confidential client (it sends the client secret), so PKCE isn't needed.
+        autogenerate_code_verifier=False,
     )
 
 
