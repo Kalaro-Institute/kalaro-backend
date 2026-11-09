@@ -133,5 +133,7 @@ GOOGLE_OAUTH_CLIENT_SECRET = env("GOOGLE_OAUTH_CLIENT_SECRET", default="")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="noreply@kalaro.local")
 FRONTEND_BASE_URL = env("FRONTEND_BASE_URL", default="http://localhost:3000")
 # Where the browser lands after the Google Calendar consent screen (appended to
-# FRONTEND_BASE_URL, with ?calendar=connected or ?calendar=error).
-GOOGLE_CALENDAR_RETURN_PATH = env("GOOGLE_CALENDAR_RETURN_PATH", default="/calendar-connected")
+# FRONTEND_BASE_URL, with ?google_connected=true or ?google_connected=false).
+GOOGLE_CALENDAR_RETURN_PATH = env(
+    "GOOGLE_CALENDAR_RETURN_PATH", default="/dashboard/instructor/live-classes"
+)

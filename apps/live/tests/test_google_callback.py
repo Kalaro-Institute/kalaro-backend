@@ -21,7 +21,7 @@ def test_success_saves_token_and_returns_to_frontend(instructor, monkeypatch):
     monkeypatch.setattr("apps.live.api.exchange_code_for_refresh_token", lambda code: "rt-1")
     r = Client().get(URL, {"code": "abc", "state": make_state(instructor.id)})
     assert r.status_code == 302
-    assert r["Location"] == "https://app.example.com/calendar-connected?calendar=connected"
+    assert r["Location"] == "https://app.example.com/dashboard/instructor/live-classes?google_connected=true"
     assert GoogleCalendarGrant.objects.get(user=instructor).refresh_token == "rt-1"
 
 
@@ -39,7 +39,7 @@ def test_reconnect_updates_existing_grant(instructor, monkeypatch):
 ])
 def test_bad_requests_go_back_with_error_not_500(instructor, params):
     r = Client().get(URL, params)
-    assert r.status_code == 302 and r["Location"].endswith("?calendar=error")
+    assert r.status_code == 302 and r["Location"].endswith("?google_connected=false")
     assert not GoogleCalendarGrant.objects.exists()
 
 
@@ -48,7 +48,7 @@ def test_expired_state_rejected(instructor, monkeypatch):
     monkeypatch.setattr("apps.live.google_calendar.signing.loads",
                         lambda *a, **k: (_ for _ in ()).throw(signing.SignatureExpired("old")))
     r = Client().get(URL, {"code": "abc", "state": state})
-    assert r["Location"].endswith("?calendar=error")
+    assert r["Location"].endswith("?google_connected=false")
 
 
 def test_google_exchange_failure_goes_back_with_error(instructor, monkeypatch):
@@ -57,12 +57,12 @@ def test_google_exchange_failure_goes_back_with_error(instructor, monkeypatch):
 
     monkeypatch.setattr("apps.live.api.exchange_code_for_refresh_token", boom)
     r = Client().get(URL, {"code": "abc", "state": make_state(instructor.id)})
-    assert r["Location"].endswith("?calendar=error")
+    assert r["Location"].endswith("?google_connected=false")
     assert not GoogleCalendarGrant.objects.exists()
 
 
 def test_missing_refresh_token_is_an_error(instructor, monkeypatch):
     monkeypatch.setattr("apps.live.api.exchange_code_for_refresh_token", lambda code: None)
     r = Client().get(URL, {"code": "abc", "state": make_state(instructor.id)})
-    assert r["Location"].endswith("?calendar=error")
+    assert r["Location"].endswith("?google_connected=false")
     assert not GoogleCalendarGrant.objects.exists()
